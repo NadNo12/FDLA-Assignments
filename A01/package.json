@@ -9,6 +9,8 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@elysiajs/swagger": "^0.7.3",
+    "@extractus/feed-extractor": "^7.0.6",
     "@types/uuid": "^9.0.5",
     "elysia": "^0.7.16",
     "eta": "^3.1.1",

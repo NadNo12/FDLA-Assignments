@@ -1,9 +1,11 @@
 // Import necessary libraries and modules
 import { Elysia, t } from "elysia";
+import { swagger } from '@elysiajs/swagger';
 import { Database } from "bun:sqlite";
 import { Eta } from "eta";
 import { join } from "path";
 import { v4 as uuid } from "uuid";
+import { extract } from '@extractus/feed-extractor'
 
 // Initialize the SQLite database connection
 const db = new Database("data.db")
@@ -48,8 +50,39 @@ const getEvents = () => {
     return events
 }
 
+// Types extracted from example Atom Feed
+type Entry = {
+    id:          string;
+    title:       string;
+    link:        {
+        "@_href": string;
+    };
+    published:   string;
+    description: string;
+    updated:     string;
+    summary:     string;
+    author:      {
+        name: string;
+    };
+}
+
+const isEntry = (obj: any): obj is Entry => {
+    return 'id' in obj && 'title' in obj && 'link' in obj && 'published' in obj && 'description' in obj && 'updated' in obj && 'summary' in obj && 'author' in obj
+}
+
+
 // Create a new Elysia server instance
 const app = new Elysia()
+    // @ts-ignore
+    .use(swagger({
+        path: '/swagger',
+        documentation: {
+            info: {
+                title: 'Nadjim & Kai\'s Atom Feed Documentation',
+                version: '1.0.0'
+            },
+        }
+    }))
 
     // GET endpoint to display the event form and list all events
     .get("/", () => {
@@ -58,6 +91,11 @@ const app = new Elysia()
                 'Content-Type': 'text/html'
             }
         })
+    }, {
+        detail: {
+            summary: 'Endpoint to display the event form and list all events in HTML',
+            tags: ['HTML'],
+        }
     })
 
     // POST endpoint to add a new event to the database and redirect to the event form
@@ -85,7 +123,12 @@ const app = new Elysia()
             title: t.String(),
             date: t.String(),
             description: t.String()
-        })
+        }),
+
+        detail: {
+            summary: 'Endpoint to add a new event to the database and redirect to the event form',
+            tags: ['HTML'],
+        }
     })
 
     // GET endpoint to provide an Atom feed for the events
@@ -95,6 +138,71 @@ const app = new Elysia()
                 'Content-Type': 'application/atom+xml; charset=utf-8'
             }
         })
+    }, {
+        detail: {
+            summary: 'Endpoint to provide an Atom feed for the events',
+            tags: ['Atom'],
+        }
+    })
+
+    .get("/ingest", async ({ query: { url } }) => {
+        // Extract events from the Atom feed
+        const result = await extract(url, {
+            normalization: true,
+            useISODateFormat: true,
+            getExtraEntryFields: (entry) => entry,
+        });
+
+        const { entries } = result;
+
+        // Return error message if there are no events
+        if (!entries || entries?.length === 0) {
+            throw new Error('Atom feed could not be ingested');
+        }
+
+        const existing = getEvents();
+
+        for (const entry of entries) {
+            // Check if the entry is a valid event
+            if (!isEntry(entry)) continue;
+            const { id, title, description, summary, author: { name }, updated, published, link } =  entry;
+            // If the event already exists, skip it
+            if (existing.some(e => e.uuid === id)) continue;
+            // Add the event to the database
+            db.query(`INSERT INTO events (uuid, name, title, date, description, created, updated) VALUES ($uuid, $name, $title, $date, $description, $created, $updated)`)
+                .run({
+                    $uuid: id,
+                    $name: name,
+                    $title: title,
+                    $date: updated,
+                    $description: summary,
+                    $created: published,
+                    $updated: updated,
+                })
+        }
+
+        return new Response(eta.render("./atom-feed", { events: getEvents(), metadata }), {
+            headers: {
+                'Content-Type': 'application/atom+xml; charset=utf-8'
+            }
+        })
+    }, {
+        query: t.Object({
+            url: t.String({ description: 'The URL of the Atom feed to ingest events from' }),
+        }),
+
+        detail: {
+            summary: 'Endpoint to ingest events from an Atom feed',
+            tags: ['Atom'],
+            responses: {
+                200: {
+                    description: 'Success. Feed was ingested into the database. Returns the new feed',
+                },
+                404: {
+                    description: 'Feed could not be ingested.',
+                }
+            }
+        }
     })
 
     // Start the server on port 3000
