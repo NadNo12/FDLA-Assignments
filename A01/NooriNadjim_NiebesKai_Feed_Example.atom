@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed
+	xmlns="http://www.w3.org/2005/Atom">
+	<title>Events feed</title>
+	<id>urn:uuid:bb5b3003-98e1-4588-b850-8c52130664ec</id>
+	<updated>2023-10-19T16:24:43.839Z</updated>
+	<link rel="self" href="http://localhost:3000/feed" />
+	<entry>
+		<title>BBQ</title>
+		<id>urn:uuid:69404b6d-9418-42d1-a6fb-5c891276537b</id>
+		<content type="text">14.10.2023, 16:00:00 - BBQ at my place!</content>
+		<published>2023-10-11T15:50:09.097Z</published>
+		<updated>2023-10-11T15:50:09.097Z</updated>
+		<author>
+			<name> John Doe</name>
+		</author>
+	</entry>
+	<entry>
+		<title>Garden Night</title>
+		<id>urn:uuid:f0b9be72-bb32-47ac-bc7c-6fe0304a29e3</id>
+		<content type="text">11.10.2023, 17:16:00 - Free flowers!</content>
+		<published>2023-10-11T15:16:40.527Z</published>
+		<updated>2023-10-11T15:16:40.527Z</updated>
+		<author>
+			<name> Juli Lang</name>
+		</author>
+	</entry>
+	<entry>
+		<title>Garden night</title>
+		<id>urn:uuid:urn:uuid:75e661d3-9d63-46e2-89da-535b85b94e35</id>
+		<content type="text">4.10.2023, 18:09:58 - Free flowers!</content>
+		<published>2023-10-03T10:03:08Z</published>
+		<updated>2023-10-04T16:09:58Z</updated>
+		<author>
+			<name> Julia Lang</name>
+		</author>
+	</entry>
+</feed>

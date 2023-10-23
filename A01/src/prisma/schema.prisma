@@ -1,0 +1,53 @@
+// Modelled after https://validator.w3.org/feed/docs/atom.html
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./data.db"
+}
+
+model Feed {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  title     String
+  link      String
+  authors   Author[]
+  events    Event[]
+}
+
+model Source {
+  id        String   @id @default(uuid())
+  title     String
+  updatedAt DateTime @updatedAt
+  Event     Event[]
+}
+
+// Author of the Feed or Author of an Event Entry
+model Author {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String
+  email     String?
+  Feed      Feed?    @relation(fields: [feedId], references: [id])
+  feedId    String?
+  Event     Event?   @relation(fields: [eventId], references: [id])
+  eventId   String?
+}
+
+model Event {
+  id        String   @id @default(uuid())
+  authors   Author[]
+  title     String
+  content   String
+  link      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Feed      Feed?    @relation(fields: [feedId], references: [id])
+  feedId    String?
+  source    Source?  @relation(fields: [sourceId], references: [id])
+  sourceId  String?
+}
