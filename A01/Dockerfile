@@ -5,13 +5,13 @@ COPY --from=node:18 /usr/local/bin/node /usr/local/bin/node
 
 COPY package.json ./
 COPY bun.lockb ./
-COPY src ./
 
 RUN bun install
 
+COPY src ./src
+COPY prisma ./prisma
+
 RUN bunx prisma generate
 
-RUN rm -rf /usr/local/bin/node
-
 EXPOSE 3000
-CMD ["bun", "run", "--watch", "main.ts"]
+CMD ["bun", "run", "--watch", "src/main.ts"]

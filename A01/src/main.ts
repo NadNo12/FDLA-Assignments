@@ -6,6 +6,7 @@ import {extract} from '@extractus/feed-extractor';
 import {Prisma, PrismaClient} from "@prisma/client";
 import atomFeed from "./templates/atom-feed.ts";
 import eventForm from "./templates/event-form.ts";
+import {inspect} from "bun";
 
 // Initialize the SQLite database connection
 const prisma = new PrismaClient({
@@ -34,6 +35,35 @@ const feed = await prisma.feed.upsert({
 });
 
 console.log('Feed metadata', feed);
+
+const cleanUp = async () => {
+    return Promise.allSettled([
+        prisma.feed.deleteMany({
+            where: { id: {not: FEED_ID} }
+        }),
+        prisma.event.deleteMany({
+            where: { OR: [{ feedId: {not: FEED_ID } }, { feedId: null }] }
+        }),
+        prisma.author.deleteMany({
+            where: { OR: [{ feedId: {not: FEED_ID } }, { feedId: null }] }
+        }),
+    ]).catch(console.log);
+};
+
+console.log('Cleaning up');
+console.log(await cleanUp());
+
+const getAll = async () => {
+    return Promise.allSettled([
+        prisma.feed.findMany(),
+        prisma.event.findMany(),
+        prisma.author.findMany(),
+        prisma.source.findMany(),
+    ]);
+}
+
+console.log('Data')
+console.log(inspect(await getAll()))
 
 // Types extracted from example Atom Feed
 type Entry = {

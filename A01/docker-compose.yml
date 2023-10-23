@@ -3,6 +3,8 @@ services:
   atom-feed-server:
     build:
       dockerfile: ./Dockerfile
+    volumes:
+      - ./src/main.ts:/app/src/main.ts
     ports:
       - "127.0.0.1:3000:3000"
     env_file:
