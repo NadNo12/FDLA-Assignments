@@ -2,7 +2,7 @@
 import {Elysia, t} from "elysia";
 import {swagger} from '@elysiajs/swagger';
 import {v4 as uuid} from "uuid";
-import {extract} from '@extractus/feed-extractor';
+import {extract, FeedEntry} from '@extractus/feed-extractor';
 import {Prisma, PrismaClient} from "@prisma/client";
 import atomFeed from "./templates/atom-feed.ts";
 import eventForm from "./templates/event-form.ts";
@@ -65,36 +65,52 @@ const getAll = async () => {
 console.log('Data')
 console.log(inspect(await getAll()))
 
-// Types extracted from example Atom Feed
 type Entry = {
-    id: string;
-    title: string;
-    link: {
-        "@_href": string;
-    };
-    published: string;
+    id:          string;
+    title:       string;
+    link:        string;
+    published:   string;
     description: string;
-    updated: string;
-    summary: string;
-    author: {
+    updated:     string;
+    author:      {
         name: string;
     };
 }
 
-const isEntry = (obj: any): obj is Entry => {
-    return 'id' in obj && 'title' in obj && 'link' in obj && 'published' in obj && 'description' in obj && 'updated' in obj && 'author' in obj
+type TextNode = {
+    "#text": string;
 }
 
-const getTextContent = (obj: any) => {
-    if (typeof obj === 'string') {
-        return obj;
-    } else {
-        if (Object.hasOwn(obj, "#text")) {
-            return obj["#text"];
+const getTextNodeContent = (node: string | TextNode) => {
+    return typeof node === "string" ? node : node["#text"];
+}
+
+const getAuthorContent = (author: any) => {
+    return {
+        name: getTextNodeContent(author.name),
+    }
+}
+
+const isEntry = (entry: any) => {
+    return "id" in entry && "title" in entry && "link" in entry && "published" in entry && "description" in entry && "updated" in entry && "author" in entry;
+}
+
+const transformEntry = (entry: any): Entry | undefined => {
+    if (!isEntry(entry)) {
+        throw new Error(`Invalid entry: ${inspect(entry)}`);
+    }
+    try {
+        return {
+            id: getTextNodeContent(entry.id),
+            title: getTextNodeContent(entry.title),
+            link: entry.link["@_href"],
+            published: getTextNodeContent(entry.published),
+            description: getTextNodeContent(entry.description),
+            updated: getTextNodeContent(entry.updated),
+            author: getAuthorContent(entry.author),
         }
-        if (Object.hasOwn(obj, "@_href")) {
-            return obj["@_href"];
-        }
+    } catch (e) {
+        throw new Error(`Invalid entry: ${inspect(entry)}`);
     }
 }
 
@@ -220,28 +236,33 @@ const app = new Elysia()
 
         const {entries} = result;
 
-        console.log(entries);
-
         // Return error message if there are no events
         if (!entries || entries?.length === 0) {
             throw new Error('Atom feed could not be ingested. No entries found');
         }
 
-        if (entries.some(entry => !isEntry(entry))) {
-            throw new Error('Atom feed could not be ingested. Not all entries understood');
-        }
+        const invalidEntries: any[] = [];
 
         for (const entry of entries) {
             // Check if the entry is a valid event
-            if (!isEntry(entry)) continue;
-            const {id, title, description, author: {name}, updated, published, link} = entry;
+            if (!isEntry(entry)) {
+                invalidEntries.push(entry);
+                continue;
+            }
+
+            const transformedEntry = transformEntry(entry);
+            if (!transformedEntry) {
+                invalidEntries.push(entry);
+                continue;
+            }
+            const {id, title, description, author: {name}, updated, published, link} = transformedEntry;
 
             // Add the event to the database
             await prisma.event.upsert({
                 create: {
                     id,
-                    title: getTextContent(title),
-                    content: getTextContent(description),
+                    title: title,
+                    content: description,
                     createdAt: published,
                     authors: {
                         create: [{name}],
@@ -251,7 +272,7 @@ const app = new Elysia()
                             id: feed.id
                         }
                     },
-                    link: getTextContent(link),
+                    link: link,
                     source: {
                         connectOrCreate: {
                             where: {
@@ -267,9 +288,9 @@ const app = new Elysia()
                 },
                 update: {
                     updatedAt: new Date(),
-                    title: getTextContent(title),
-                    content: getTextContent(description),
-                    link: getTextContent(link),
+                    title: title,
+                    content: description,
+                    link: link,
                 },
                 where: {
                     feedId: feed.id,
@@ -278,11 +299,11 @@ const app = new Elysia()
             }).catch(console.log)
         }
 
-        return new Response(await atomFeed({events: await getEvents(), metadata: await getMetadata()}), {
-            headers: {
-                'Content-Type': 'application/atom+xml; charset=utf-8'
-            }
-        })
+        if (invalidEntries.length > 0) {
+            return new Response(`Not all entries could be processed. Malformed entries:\n\n${invalidEntries.join('\n')}`);
+        }
+
+        return new Response("All entries were processed");
     }, {
         query: t.Object({
             url: t.String({description: 'The URL of the Atom feed to ingest events from'}),
