@@ -82,7 +82,20 @@ type Entry = {
 }
 
 const isEntry = (obj: any): obj is Entry => {
-    return 'id' in obj && 'title' in obj && 'link' in obj && 'published' in obj && 'description' in obj && 'updated' in obj && 'summary' in obj && 'author' in obj
+    return 'id' in obj && 'title' in obj && 'link' in obj && 'published' in obj && 'description' in obj && 'updated' in obj && 'author' in obj
+}
+
+const getTextContent = (obj: any) => {
+    if (typeof obj === 'string') {
+        return obj;
+    } else {
+        if (Object.hasOwn(obj, "#text")) {
+            return obj["#text"];
+        }
+        if (Object.hasOwn(obj, "@_href")) {
+            return obj["@_href"];
+        }
+    }
 }
 
 const getEvents = async () => {
@@ -207,22 +220,28 @@ const app = new Elysia()
 
         const {entries} = result;
 
+        console.log(entries);
+
         // Return error message if there are no events
         if (!entries || entries?.length === 0) {
-            throw new Error('Atom feed could not be ingested');
+            throw new Error('Atom feed could not be ingested. No entries found');
+        }
+
+        if (entries.some(entry => !isEntry(entry))) {
+            throw new Error('Atom feed could not be ingested. Not all entries understood');
         }
 
         for (const entry of entries) {
             // Check if the entry is a valid event
             if (!isEntry(entry)) continue;
-            const {id, title, description, summary, author: {name}, updated, published, link} = entry;
+            const {id, title, description, author: {name}, updated, published, link} = entry;
 
             // Add the event to the database
             await prisma.event.upsert({
                 create: {
                     id,
-                    title,
-                    content: description,
+                    title: getTextContent(title),
+                    content: getTextContent(description),
                     createdAt: published,
                     authors: {
                         create: [{name}],
@@ -232,7 +251,7 @@ const app = new Elysia()
                             id: feed.id
                         }
                     },
-                    link: link["@_href"],
+                    link: getTextContent(link),
                     source: {
                         connectOrCreate: {
                             where: {
@@ -248,9 +267,9 @@ const app = new Elysia()
                 },
                 update: {
                     updatedAt: new Date(),
-                    title,
-                    content: description,
-                    link: link["@_href"],
+                    title: getTextContent(title),
+                    content: getTextContent(description),
+                    link: getTextContent(link),
                 },
                 where: {
                     feedId: feed.id,
