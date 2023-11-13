@@ -1,4 +1,4 @@
-import {ReturnedEvents} from "../main.ts";
+import type {ReturnedEvents} from "../database.ts";
 
 export default async ({events, success}: {events: ReturnedEvents, success: boolean}) =>
     `<!DOCTYPE html>
@@ -56,8 +56,9 @@ export default async ({events, success}: {events: ReturnedEvents, success: boole
             `<div class="event">
                 <h3>${event.title}</h3>
                 <p>
-                    ${event.content}
+                    ${event.summary ?? event.description}
                 </p>
+                <small>${event.authors.map(author => author.name).join(', ')}</small>
             </div>`
         ).join('')}
 

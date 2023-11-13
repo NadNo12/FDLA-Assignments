@@ -1,4 +1,4 @@
-import {ReturnedEvents, ReturnedMetadata} from "../main.ts";
+import type {ReturnedEvents, ReturnedMetadata} from "../database.ts";
 import * as prettier from 'prettier';
 
 export default async ({events, metadata}: { events: ReturnedEvents, metadata: ReturnedMetadata }) =>
@@ -11,8 +11,8 @@ export default async ({events, metadata}: { events: ReturnedEvents, metadata: Re
 
         ${events.map((event) => `<entry>
                 <title>${event.title}</title>
-                <id>${event.id.startsWith("urn:") ? '' : 'urn:uuid:'}${event.id}</id>
-                <content type="text">${event.content}</content>
+                <id>${event.id}</id>
+                <content type="text">${event.summary ?? event.description}</content>
                 <published>${event.createdAt.toISOString()}</published>
                 <updated>${event.updatedAt.toISOString()}</updated>
                 ${event.authors.map((author) =>  `<author>
