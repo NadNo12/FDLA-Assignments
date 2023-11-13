@@ -1,4 +1,4 @@
-FROM oven/bun:1.0.7
+FROM oven/bun:1.0.11
 WORKDIR /app
 
 COPY --from=node:18 /usr/local/bin/node /usr/local/bin/node
