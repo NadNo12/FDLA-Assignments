@@ -41,6 +41,9 @@ const cleanUp = async () => {
         prisma.author.deleteMany({
             where: { OR: [{ feedId: {not: FEED_ID } }, { feedId: null }] }
         }),
+        prisma.source.deleteMany({
+            where: { ingestUrl: null }
+        })
     ]).catch(console.log);
 };
 

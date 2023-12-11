@@ -22,6 +22,7 @@ model Source {
   id        String   @id @default(uuid())
   title     String
   updatedAt DateTime @updatedAt
+  ingestUrl String?
   Event     Event[]
 }
 

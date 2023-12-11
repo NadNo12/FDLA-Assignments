@@ -1,4 +1,5 @@
 https://gioele.uber.space/k/fdla2023/feed1.atom
 https://fdla-event-manager.fly.dev/feed
-https://flaskwebproject-47bce51faaa6.herokuapp.com/atom.xml
+http://juvicha.pythonanywhere.com/atom.xml
 https://fdla-backend-project.onrender.com/
+https://fdla.vercel.app/atom.xml

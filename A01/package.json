@@ -19,6 +19,7 @@
     "@elysiajs/swagger": "^0.7.4",
     "@extractus/feed-extractor": "^7.0.7",
     "@prisma/client": "5.5.2",
+    "@sinclair/typebox": "^0.31.23",
     "@types/uuid": "^9.0.7",
     "elysia": "^0.7.21",
     "uuid": "^9.0.1"

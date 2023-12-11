@@ -1,8 +1,10 @@
 import {Elysia, t} from "elysia";
+import {Value, ValueError} from "@sinclair/typebox/value";
 import {appConfig} from "../config.ts";
 import {extract, FeedData} from "@extractus/feed-extractor";
 import {inspect} from "bun";
 
+const {Check,Errors} = Value;
 
 type Entry = {
     id:          string;
@@ -31,10 +33,6 @@ const getAuthorContent = (author: any) => {
     }
 }
 
-const isEntry = (entry: any) => {
-    return "id" in entry && "title" in entry && "link" in entry && "published" in entry && "description" in entry && "updated" in entry && "author" in entry;
-}
-
 const transformEntry = (entry: any): Entry | undefined => {
     try {
         return {
@@ -52,6 +50,29 @@ const transformEntry = (entry: any): Entry | undefined => {
     }
 }
 
+const linkNodeSchema = t.Object({
+    "@_href": t.String(),
+})
+
+const textNodeSchema = t.Object({
+    "#text": t.String(),
+    "@_type": t.String(),
+})
+
+const entrySchema = t.Object({
+    id: t.String(),
+    title: t.Union([t.String(), textNodeSchema]),
+    link: t.Union([t.String(), linkNodeSchema]),
+    published: t.String(),
+    description: t.Union([t.String(), textNodeSchema]),
+    summary: t.Optional(t.Union([t.String(), textNodeSchema])),
+    updated: t.String(),
+    author: t.Object({
+        name: t.Union([t.String(), textNodeSchema]),
+        uri: t.Optional(t.Union([t.String(), textNodeSchema])),
+        email: t.Optional(t.Union([t.String(), textNodeSchema])),
+    })
+})
 
 export const postIngestFeed = new Elysia()
     .use(appConfig)
@@ -83,21 +104,38 @@ export const postIngestFeed = new Elysia()
 
         const {id: feedId} = await getMetadata();
 
-        const invalidEntries: any[] = [];
+        const schemaErrors: { entry: any, errors: ValueError[] }[] = [];
+        const transformErrors: any[] = [];
+        const databaseErrors: any[] = [];
 
         for (const entry of entries) {
-            // Check if the entry is a valid event
-            if (!isEntry(entry)) {
-                invalidEntries.push(entry);
+            if (!Check(entrySchema, entry)) {
+                const errors = Array.from(Errors(entrySchema, entry));
+                schemaErrors.push({ entry, errors });
                 continue;
             }
 
             const transformedEntry = transformEntry(entry);
             if (!transformedEntry) {
-                invalidEntries.push(entry);
+                transformErrors.push(entry);
                 continue;
             }
+
             const {id, title, description, author: {name}, updated, published, link, summary} = transformedEntry;
+
+            const source = {
+                connectOrCreate: {
+                    where: {
+                        id: canonicalOrigin,
+                    },
+                    create: {
+                        id: canonicalOrigin,
+                        ingestUrl: ingestUrl.toString(),
+                        title: result.title ? getTextNodeContent(result.title) : `Untitled feed from ${url}`,
+                        updatedAt: new Date(),
+                    },
+                }
+            };
 
             // Add the event to the database
             await prisma.event.upsert({
@@ -107,6 +145,7 @@ export const postIngestFeed = new Elysia()
                     description: description,
                     summary: summary,
                     createdAt: published,
+                    updatedAt: updated,
                     authors: {
                         create: [{name}],
                     },
@@ -116,35 +155,40 @@ export const postIngestFeed = new Elysia()
                         }
                     },
                     link: link,
-                    source: {
-                        connectOrCreate: {
-                            where: {
-                                id: canonicalOrigin,
-                            },
-                            create: {
-                                id: canonicalOrigin,
-                                title: result.title ? getTextNodeContent(result.title) : `Untitled feed from ${url}`,
-                                updatedAt: new Date(),
-                            },
-                        }
-                    }
+                    source: source,
                 },
                 update: {
-                    updatedAt: new Date(),
+                    updatedAt: updated,
                     title: title,
                     description: description,
                     summary: summary,
                     link: link,
+                    source: source,
                 },
                 where: {
                     feedId,
                     id,
                 }
-            }).catch(console.log)
+            }).catch(error => {
+                databaseErrors.push({ url, entry, error });
+            })
         }
 
-        if (invalidEntries.length > 0) {
-            throw new Error(`Not all entries could be processed. Feed: ${ingestUrl}\nMalformed entries:\n\n${invalidEntries.join('\n')}`);
+        if (schemaErrors.length + transformErrors.length) {
+            let errorResponse = `Not all entries could be processed.\nFeed:${ingestUrl}\n`;
+            if (schemaErrors.length) {
+                errorResponse += '\nFailed schema validation:\n';
+                errorResponse += schemaErrors.map(({ entry, errors }) => `\nEntry: ${JSON.stringify(entry)}\nErrors: ${JSON.stringify(errors)}`);
+            }
+            if (transformErrors.length) {
+                errorResponse += '\nFailed to transform:\n';
+                errorResponse += transformErrors.map(entry => JSON.stringify(entry)).join('\n');
+            }
+            if (databaseErrors.length) {
+                errorResponse += '\nFailed to add to database:\n';
+                errorResponse += databaseErrors.map(entry => JSON.stringify(entry)).join('\n');
+            }
+            throw new Error(errorResponse);
         }
 
         return new Response("All entries were processed");
